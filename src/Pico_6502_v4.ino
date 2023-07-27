@@ -9,7 +9,6 @@
 
 #include "pico/stdlib.h"
 #include "pico/time.h"
-#include "pico/config.h"
 
 //#ifdef OVERCLOCK
 //#include "hardware/clocks.h"
@@ -34,8 +33,7 @@
 #define LINECHARS   WIDTH / FONT_CHAR_WIDTH
 
 // Here's how an 320x240 256 colors graphics display is declared.
-//DVIGFX8 display(DVI_RES_320x240p60, true, pico_neo6502_cfg);
-DVIGFX8 display(DVI_RES_320x240p60, true, pico_sock_cfg);
+DVIGFX8 display(DVI_RES_320x240p60, true, pico_neo6502_cfg);
 
 //
 uint32_t       clockCount = 0UL;

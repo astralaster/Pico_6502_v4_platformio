@@ -5,8 +5,7 @@
 #ifndef _MEMORY_h
 #define _MEMORY_h
 
-//#include "Arduino.h"
-#include <cstdint>
+#include "Arduino.h"
 
 #define MEMORY_SIZE  0x10000 // 64k
 

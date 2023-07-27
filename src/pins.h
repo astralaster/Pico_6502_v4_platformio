@@ -2,7 +2,6 @@
 // 
 // Author: Rien Matthijsse
 // 
-#include <cstdint>
 #define NEO6502
 
 // 65c02 connections

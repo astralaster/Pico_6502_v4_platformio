@@ -4,12 +4,12 @@
 
 #include "m6821.h"
 
-uint8_t regKBD;
-uint8_t regKBDDIR;    // Dir register when KBDCR.bit2 == 0
-uint8_t regKBDCR;
-uint8_t regDSP;
-uint8_t regDSPDIR;    // Dir register when DSPCR.bit2 == 0
-uint8_t regDSPCR;
+byte regKBD;
+byte regKBDDIR;    // Dir register when KBDCR.bit2 == 0
+byte regKBDCR;
+byte regDSP;
+byte regDSPDIR;    // Dir register when DSPCR.bit2 == 0
+byte regDSPCR;
 
 
 /// <summary>

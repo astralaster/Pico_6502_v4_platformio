@@ -2,8 +2,6 @@
 // Author: Rien Matthijsse
 // 
 #include "mos65C02.h"
-#include "hardware/gpio.h"
-#include <cstdint>
 
 #define DELAY_FACTOR_SHORT() asm volatile("nop\nnop\nnop\nnop\n");
 //#define DELAY_FACTOR_LONG()  asm volatile("nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\n");
@@ -17,7 +15,7 @@ constexpr uint32_t BUS_MASK = 0xFF;
 
 //
 uint8_t   resetCount;
-bool   inReset = false;
+boolean   inReset = false;
 uint8_t   dataDir = 2;
 
 /// <summary>
@@ -25,7 +23,7 @@ uint8_t   dataDir = 2;
 /// </summary>
 /// <param name="enable"></param>
 inline __attribute__((always_inline))
-void setClock(bool clock) {
+void setClock(boolean clock) {
   gpio_put(uP_CLOCK, clock);
 }
 
@@ -34,7 +32,7 @@ void setClock(bool clock) {
 /// </summary>
 /// <param name="enable"></param>
 inline __attribute__((always_inline))
-void setReset(bool reset) {
+void setReset(boolean reset) {
   gpio_put(uP_RESET, reset);
 }
 
@@ -55,9 +53,9 @@ inline __attribute__((always_inline))
 void setDir(uint8_t direction) {
   if (direction != dataDir) {
     switch (direction) {
-    case GPIO_OUT:  gpio_set_dir_masked(BUS_MASK, BUS_MASK);
+    case OUTPUT:  gpio_set_dir_masked(BUS_MASK, BUS_MASK);
       break;
-    case GPIO_IN:   gpio_set_dir_masked(BUS_MASK, (uint32_t)0UL);
+    case INPUT:   gpio_set_dir_masked(BUS_MASK, (uint32_t)0UL);
       break;
     }
 
@@ -119,7 +117,7 @@ uint8_t getData() {
 inline __attribute__((always_inline))
 void putData(uint8_t data) {
 
-  setDir(GPIO_OUT);
+  setDir(OUTPUT);
   setEnable(en_D0_7);
   gpio_put_masked(BUS_MASK, (uint32_t)data);
 }
@@ -129,19 +127,15 @@ void putData(uint8_t data) {
 /// </summary>
 void init6502() {
   // CLOCK
-  gpio_init(uP_CLOCK);
-  gpio_set_dir(uP_CLOCK, GPIO_OUT);
+  pinMode(uP_CLOCK, OUTPUT);
   setClock(CLOCK_HIGH);
 
   // RESET
-  gpio_init(uP_RESET);
-  gpio_set_dir(uP_RESET, GPIO_OUT);
+  pinMode(uP_RESET, OUTPUT);
   setReset(RESET_HIGH);
 
   // RW
-  gpio_init(uP_RW);
-  gpio_set_dir(uP_RW, GPIO_IN);
-  gpio_set_pulls(uP_RW, true, false);
+  pinMode(uP_RW, INPUT_PULLUP);
 
   // BUS ENABLE
   gpio_init_mask(en_MASK); 
@@ -151,7 +145,7 @@ void init6502() {
   // ADDRESS
   // DATA
   gpio_init_mask(BUS_MASK);
-  setDir(GPIO_IN);
+  setDir(INPUT);
 }
 
 /// <summary>
@@ -175,7 +169,7 @@ void tick6502()
     //------------------------------------------------------------------------------------
     setClock(CLOCK_LOW);
     // set INPUT
-    setDir(GPIO_IN);
+    setDir(INPUT);
 
     DELAY_FACTOR_LONG();
 //#if CPU_DEBUG
