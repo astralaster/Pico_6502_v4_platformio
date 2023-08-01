@@ -8,7 +8,7 @@
 #include "Arduino.h"
 
 #define MSBASIC_START 0xA000
-#define MSBASIC_SIZE  0x2047
+#define MSBASIC_SIZE  0x207A
 
 extern const uint8_t msbasic_bin[];
 

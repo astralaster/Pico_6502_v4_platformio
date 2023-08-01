@@ -8,7 +8,7 @@
 #include "Arduino.h"
 
 #define EWOZ_START 0xFC00
-#define EWOZ_SIZE  0x0330
+#define EWOZ_SIZE  0x026D
 
 extern const uint8_t ewoz_bin[];
 

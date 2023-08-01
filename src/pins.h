@@ -14,6 +14,8 @@
 
 #define uP_BUZZ   20
 
+#define pDebug    25 // UEXT pin 10
+
 /*
 BUS:
 0 - 7

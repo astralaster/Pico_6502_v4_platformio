@@ -11,7 +11,7 @@
 
 //#define TEST_MODE
 
-#define CPU_DEBUG   1
+//#define CPU_DEBUG   1
 
 
 #define RESET_LOW   false
@@ -28,10 +28,7 @@
 
 void init6502();
 void reset6502();
-void tick6502();
-#ifdef TEST_MODE
-void test6502();
-#endif
+//void tick6502();
 
 #endif
 

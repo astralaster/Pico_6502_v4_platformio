@@ -28,7 +28,7 @@ sROMImage ROMs[] = {
   { "Ewoz v1.2",    EWOZ_START,    EWOZ_SIZE,    ewoz_bin },
   { "Vectors",      0xFFFA,        0X0006,       vectors_bin },
   { "Disasm v1.0",  MON_EXT_START, MON_EXT_SIZE, mon_ext_bin },
-  { "Msbasic v1.1", MSBASIC_START, MSBASIC_SIZE, msbasic_bin }
+  { "MSBasic v1.11",  MSBASIC_START, MSBASIC_SIZE, msbasic_bin }
 };
 
 /// <summary>

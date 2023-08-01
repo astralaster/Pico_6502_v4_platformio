@@ -10,16 +10,12 @@
 #include "pico/stdlib.h"
 #include "pico/time.h"
 
-//#ifdef OVERCLOCK
-//#include "hardware/clocks.h"
-//#include "hardware/vreg.h"
-//#endif
+#define  UCASE_ONLY
 
 #include <PicoDVI.h>
 
 #include "mos65C02.h"
 #include "memory.h"
-#include "m6821.h"
 #include "sound.h"
 
 #define FRAMERATE       10 // frames per sec
@@ -36,7 +32,8 @@
 DVIGFX8 display(DVI_RES_320x240p60, true, pico_neo6502_cfg);
 
 //
-uint32_t       clockCount = 0UL;
+extern uint32_t       clockCount;
+
 unsigned long  lastClockTS;
 unsigned long  frameClockTS;
 
@@ -47,11 +44,32 @@ uint8_t        currentColor;
 uint8_t        currentColorIndex = 0;
 uint32_t       hasDisplayUpdate = 0;
 
+
+/// <summary>
+/// 
+/// </summary>
+void scanSound() {
+  switch (mem[SND]) {
+    case 0x00:
+      break;
+
+    case 1:
+      // push note
+      SoundSetNote(mem[SND + 1]);
+      SoundSetDuration(mem[SND + 2]);
+      SoundPushTheNote();
+      mem[SND] = 0x00;
+      break;
+  }
+
+  mem[SND + 3] = SoundQueueIsEmpty();
+}
+
 /// <summary>
 /// performa a action on the display
 /// </summary>
 /// <param name="vCmd"></param>
-void setCommand(uint8_t vCmd) {
+void setVDUCommand(uint8_t vCmd) {
   int16_t cx, cy, ex, ey;
 
   switch (vCmd) {
@@ -84,8 +102,8 @@ void setCommand(uint8_t vCmd) {
 
   case 0x03: // set color
     setColor(mem[0xD029]);
-//    Serial.printf("COLOR %02d\n", currentColor);
-    // bg color ignored
+    //    Serial.printf("COLOR %02d\n", currentColor);
+        // bg color ignored
     break;
 
   case 0x04: // set pixel (ignore screen mode)
@@ -115,6 +133,14 @@ void setCommand(uint8_t vCmd) {
     showCursor(true);
     hasDisplayUpdate++;
     break;
+  }
+}
+
+///
+void scanVDU() {
+  if (mem[VDU] != 0x00) {
+    setVDUCommand(mem[VDU]);
+    mem[VDU] = 0x00;
   }
 }
 
@@ -176,7 +202,7 @@ void setCursor() {
   if (statusCursor) {
     cursor_x = display.getCursorX();
     cursor_y = display.getCursorY();
-    display.fillRect(cursor_x, cursor_y + FONT_CHAR_HEIGHT - 2, FONT_CHAR_WIDTH , 2, currentColor); // show cursor
+    display.fillRect(cursor_x, cursor_y + FONT_CHAR_HEIGHT - 2, FONT_CHAR_WIDTH, 2, currentColor); // show cursor
   }
 }
 
@@ -273,8 +299,8 @@ void setup() {
   Serial.begin(115200);
   //  while (!Serial);
 
-  sleep_ms(2500);
-  Serial.println("NEO6502 memulator v0.02c");
+  sleep_ms(5000);
+  Serial.println("NEO6502 memulator v0.021a");
 
   if (!display.begin()) {
     Serial.println("ERROR: not enough RAM available");
@@ -287,11 +313,10 @@ void setup() {
 
   initmemory();
 
-  init6821();
-  initSound();
-
   init6502();
-  reset6502();
+  //reset6502();
+
+  initSound();
 
   // 4 stats
   clockCount = 0UL;
@@ -301,8 +326,10 @@ void setup() {
   setColor(4); // BLUE
   display.print("NEO6502");
   setColor(255); // WHITE
-  display.println(" memulator v0.02c");
+  display.println(" memulator v0.021a");
   setColor(2); // GREEN
+
+  hasDisplayUpdate++;
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -316,13 +343,18 @@ void setup() {
 inline __attribute__((always_inline))
 void serialEvent1()
 {
+  if (mem[DSP] != 0x00) {
+    writeChar(mem[DSP] & 0x7F);
+    mem[DSP] = 0x00; // we're done
+  }
+
   if (Serial.available()) {
     switch (Serial.peek()) {
 
     case 0x12: // ^R
       Serial.read();
       Serial.println("RESET");
-//      showCursor(true);
+      //      showCursor(true);
       reset6502();
       break;
 
@@ -337,47 +369,42 @@ void serialEvent1()
       Serial.read();
       Serial.print("VDU: ");
       for (uint8_t i = 0; i < 16; i++) {
-        Serial.printf("%02X ", mem[0XD020 + i]);
+        Serial.printf("%02X ", mem[VDU + i]);
       }
       Serial.println();
       break;
 
     default:
-      if ((regKBDCR & 0x80) == 0x00) {    // read serial byte only if we can set 6821 interrupt
-        cli();                            // stop interrupts while changing 6821 guts.
-        // 6821 portA is available      
+      if (mem[KBD] == 0x00) {             // read serial byte only if we can receive a char
+//        cli();                          // stop interrupts
+#ifdef UCASE_ONLY
         byte ch = toupper(Serial.read()); // apple1 expects upper case
-        //       Serial.printf("in [%02X]\n", ch);
-        regKBD = ch | 0x80;               // apple1 expects bit 7 set for incoming characters.
-        //     Serial.printf("Pressed %02x\n", regKBD);
-        regKBDCR |= 0x80;                 // set 6821 interrupt
-        sei();
+        mem[KBD] = ch | 0x80;             // apple1 expects bit 7 set for incoming characters.
+#else
+        byte ch = Serial.read();
+        mem[KBD] = ch;
+#endif
+//        sei();
       }
+
       break;
     }
   }
-  return;
 }
-
-uint32_t rpt;
 
 /// <summary>
 /// 
 /// </summary>
 void loop() {
-  static uint32_t i, j, f = 1;
+  static uint32_t i, f = 1;
 
-  tick6502();
-  clockCount++;
+//  tick6502();
 
-  if (j-- == 0) {
-    serialEvent1();
-
-    j = 2500;
-  }
+  serialEvent1();
+  scanVDU();
+  scanSound();
 
   if (f-- == 0) {
-    rpt++;
     if ((millis() - frameClockTS) >= FRAMETIME) {
       if (hasDisplayUpdate > 0) {
         display.swap(true, false);
@@ -385,14 +412,12 @@ void loop() {
       }
 
       frameClockTS = millis();
-      rpt = 0;
     }
-
 
     f = 7500;
   }
-    
-    // only do stas when in loggin mode
+
+  // only do stats when in logging mode
   if (logState) {
     if (i-- == 0) {
       if ((millis() - lastClockTS) >= 5000UL) {

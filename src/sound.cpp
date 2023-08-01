@@ -13,6 +13,8 @@
 #include "RPi_Pico_TimerInterrupt.h"
 #include <cppQueue.h>
 
+#define PLAY_INTRO
+
 //creates pwm instance
 RP2040_PWM* PWM_Instance;
 RPI_PICO_Timer ITimer0(0);
@@ -254,6 +256,7 @@ boolean SoundPushTheNote() {
     return pushNote(gNote.Note, gNote.Duration);
 }
 
+#ifdef PLAY_INTRO
 //
 sNote sIntro[] = {
   {"C3", 1},
@@ -262,6 +265,7 @@ sNote sIntro[] = {
   {"C4", 2},
   {"P",  1}
 };
+#endif
 
 /// <summary>
 /// 
@@ -276,7 +280,9 @@ void initSound() {
 
   PWM_Instance = new RP2040_PWM(uP_BUZZ, 440, 0);
 
+#ifdef PLAY_INTRO
   // play intro
   for (uint8_t i = 0; i < 5; i++)
     pushNote(sIntro[i].Note, sIntro[i].Duration);
+#endif
 }

@@ -1,7 +1,9 @@
 // 
 // Author: Rien Matthijsse
 // 
+#include "RPi_Pico_TimerInterrupt.h"
 #include "mos65C02.h"
+#include "memory.pio.h"
 
 #define DELAY_FACTOR_SHORT() asm volatile("nop\nnop\nnop\nnop\n");
 //#define DELAY_FACTOR_LONG()  asm volatile("nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\n");
@@ -14,9 +16,24 @@
 constexpr uint32_t BUS_MASK = 0xFF;
 
 //
+RPI_PICO_Timer IClock1(1);
+
+volatile uint32_t  clockCount = 0UL;
 uint8_t   resetCount;
 boolean   inReset = false;
 uint8_t   dataDir = 2;
+
+bool addressValid = false;
+bool clockActive = false;
+
+/// <summary>
+/// 
+/// </summary>
+/// <param name="vDebug"></param>
+inline __attribute__((always_inline))
+void setDebug(boolean vDebug) {
+  gpio_put(pDebug, vDebug);
+}
 
 /// <summary>
 /// drive the clockpin
@@ -50,16 +67,22 @@ void setEnable(uint32_t enable) {
 /// </summary>
 /// <param name="direction"></param>
 inline __attribute__((always_inline))
-void setDir(uint8_t direction) {
-  if (direction != dataDir) {
-    switch (direction) {
-    case OUTPUT:  gpio_set_dir_masked(BUS_MASK, BUS_MASK);
-      break;
-    case INPUT:   gpio_set_dir_masked(BUS_MASK, (uint32_t)0UL);
-      break;
-    }
+void setDirInput() {
+  if (dataDir != INPUT) {
+    gpio_set_dir_masked(BUS_MASK, (uint32_t)0UL);
+    dataDir = INPUT;
+  }
+}
 
-    dataDir = direction;
+/// <summary>
+/// set direction of databus mux
+/// </summary>
+/// <param name="direction"></param>
+inline __attribute__((always_inline))
+void setDirOutput() {
+  if (dataDir != OUTPUT) {
+    gpio_set_dir_masked(BUS_MASK, BUS_MASK);
+    dataDir = OUTPUT;
   }
 }
 
@@ -73,41 +96,17 @@ bool getRW() {
 }
 
 /// <summary>
-/// read the address bus
-/// </summary>
-/// <returns></returns>
-inline __attribute__((always_inline))
-uint16_t getAddress() {
-  // we are already in INPUT
-  //setDir(INPUT);
-
-  // read A0-7
-  setEnable(en_A0_7);
-  DELAY_FACTOR_SHORT();
-  uint16_t addr = gpio_get_all() & BUS_MASK;
-
-  // read A8-15
-  setEnable(en_A8_15);
-  DELAY_FACTOR_SHORT();
-  addr |= (gpio_get_all() & BUS_MASK) << 8;
-
-  return addr;
-}
-
-/// <summary>
 /// read the databus
 /// </summary>
 /// <returns></returns>
 inline __attribute__((always_inline))
-uint8_t getData() {
+void getData() {
   // we are already in INPUT
   //setDir(INPUT);
 
   setEnable(en_D0_7);
   DELAY_FACTOR_SHORT();
-  uint8_t data = gpio_get_all() & BUS_MASK;
-
-  return data;
+  data = gpio_get_all() & BUS_MASK;
 }
 
 /// <summary>
@@ -115,11 +114,107 @@ uint8_t getData() {
 /// </summary>
 /// <param name="data"></param>
 inline __attribute__((always_inline))
-void putData(uint8_t data) {
+void putData() {
 
-  setDir(OUTPUT);
+  setDirOutput();
   setEnable(en_D0_7);
   gpio_put_masked(BUS_MASK, (uint32_t)data);
+}
+
+/// <summary>
+/// 
+/// </summary>
+inline __attribute__((always_inline))
+void tick6502()
+{
+  setDebug(true);
+
+  if (clockActive) {
+/*
+    if (addressValid) {
+        //------------------------------------------------------------------------------------
+        // do RW action
+        switch (getRW()) {
+        case RW_WRITE:
+          getData();
+          writememory(); // @address = data
+//          mem[address] = data;
+//          Serial.printf("W %04X %02X\n", address, data);
+          break;
+        }
+      }
+*/
+      setClock(CLOCK_LOW);
+      setDirInput();
+      // read A0-7
+      setEnable(en_A0_7);
+
+      DELAY_FACTOR_LONG();
+
+      //------------------------------------------------------------------------------------
+      setClock(CLOCK_HIGH);
+
+      // get A0-7
+      uint16_t addr = gpio_get_all() & BUS_MASK;
+
+      // read A8-15
+      setEnable(en_A8_15);
+      DELAY_FACTOR_SHORT();
+      addr |= (gpio_get_all() & BUS_MASK) << 8;
+      address = addr;
+      addressValid = true;
+
+      // do RW action
+      switch (getRW()) {
+      case RW_READ:
+//        readmemory(); // data = @address
+        data = mem[address];
+        putData();
+//        Serial.printf("R %04X %02X\n", address, data);
+        break;
+
+      case RW_WRITE:
+        getData();
+        writememory(); // @address = data
+        //          mem[address] = data;
+        //          Serial.printf("W %04X %02X\n", address, data);
+        break;
+
+      }
+
+    // reset mgmt
+    if (inReset) {
+      if (resetCount-- == 0) {
+        // end of reset
+        setReset(RESET_HIGH);
+        inReset = false;
+        //        Serial.printf("RESET release\n");
+      }
+    }
+
+    clockCount++;
+  } // clockActive
+
+  setDebug(false);
+}
+
+//bool __not_in_flash_func(ClockHandler)(struct repeating_timer* t)
+bool ClockHandler(struct repeating_timer* t) {
+  (void)t;
+
+  tick6502();
+  return true;
+}
+
+void blink_pin_forever(PIO pio, uint sm, uint offset, uint pin, uint freq) {
+    blink_program_init(pio, sm, offset, pin);
+    pio_sm_set_enabled(pio, sm, true);
+
+    Serial.printf("Blinking pin %d at %d Hz\n", pin, freq);
+
+    // PIO counter program takes 3 more cycles in total than we pass as
+    // input (wait for n + 1; mov; jmp)
+    pio->txf[sm] = (clock_get_hz(clk_sys) / (2 * freq)) - 3;
 }
 
 /// <summary>
@@ -127,25 +222,63 @@ void putData(uint8_t data) {
 /// </summary>
 void init6502() {
   // CLOCK
-  pinMode(uP_CLOCK, OUTPUT);
-  setClock(CLOCK_HIGH);
+  //pinMode(uP_CLOCK, OUTPUT);
+  //setClock(CLOCK_HIGH);
+
+  // DEBUG
+  pinMode(pDebug, OUTPUT);
 
   // RESET
   pinMode(uP_RESET, OUTPUT);
-  setReset(RESET_HIGH);
+  setReset(RESET_LOW);
+
+  // pinMode(uP_CLOCK, OUTPUT);
+  // gpio_put(uP_CLOCK, false);
+
+  // pinMode(8, OUTPUT);
+  // gpio_put(8, true);
+
+  // pinMode(9, OUTPUT);
+  // gpio_put(9, false);
+  
+  // pinMode(10, OUTPUT);
+  // gpio_put(10, false);
+  
 
   // RW
-  pinMode(uP_RW, INPUT_PULLUP);
+  //pinMode(uP_RW, INPUT_PULLUP);
 
   // BUS ENABLE
-  gpio_init_mask(en_MASK); 
-  gpio_set_dir_out_masked(en_MASK); // enable as output
-  setEnable(en_NONE); // all high
+  //gpio_init_mask(en_MASK); 
+  //gpio_set_dir_out_masked(en_MASK); // enable as output
+  //setEnable(en_NONE); // all high
 
   // ADDRESS
   // DATA
-  gpio_init_mask(BUS_MASK);
-  setDir(INPUT);
+  //gpio_init_mask(BUS_MASK);
+  //setDirInput();
+
+  //set up clock handler
+  clockActive = true;
+  addressValid = false;
+
+  // // Interval in microsecs
+  // if (IClock1.attachInterrupt(100000, ClockHandler)) {
+  //   Serial.printf("CLOCK driver installed [%d kHz]\n", 100);
+  // }
+  // else
+  //   Serial.println(F("Can't set Clockspeed. Select another freq"));
+
+  PIO pio = pio1;
+  uint offset = pio_add_program(pio, &blink_program);
+  Serial.printf("Loaded program at %d\n", offset);
+
+  blink_pin_forever(pio, 0, offset, uP_CLOCK, 1);
+
+  // while(true)
+  // {
+  //     Serial.printf("Received: %c\n", program_getc(pio, 0));
+  // }
 }
 
 /// <summary>
@@ -157,92 +290,3 @@ void reset6502() {
   resetCount = RESET_COUNT;
   inReset = true;
 }
-
-/// <summary>
-/// clock cycle 65C02
-/// </summary>
-//inline __attribute__((always_inline))
-void tick6502()
-{
-    setEnable(en_NONE); // all high
-
-    //------------------------------------------------------------------------------------
-    setClock(CLOCK_LOW);
-    // set INPUT
-    setDir(INPUT);
-
-    DELAY_FACTOR_LONG();
-//#if CPU_DEBUG
-//    delayMicroseconds(delay);
-//#endif
-
-    //------------------------------------------------------------------------------------
-    setClock(CLOCK_HIGH);
-
-    DELAY_FACTOR_SHORT();
-
-    address = getAddress();
-
-    // do RW action
-    switch (getRW()) {
-    case RW_READ:
-      readmemory(); // data = @address
-      putData(data);
-//      Serial.printf("R %04X %02X\n", address, data);
-      break;
-
-    case RW_WRITE:
-      data = getData();
-      writememory(); // @address = data
-//      Serial.printf("W %04X %02X\n", address, data);
-      break;
-    }
-
-    // reset mgmt
-    if (inReset) {
-      if (resetCount-- == 0) {
-        // end of reset
-        setReset(RESET_HIGH);
-        inReset = false;
-//        Serial.printf("RESET release\n");
-      }
-    }
-}
-
-#ifdef TEST_MODE
-/// <summary>
-/// 
-/// </summary>
-void test6502() {
-  uint32_t dly = 50;
-
-  Serial.println("begin");
-
-  Serial.println("RESET");
-  setReset(RESET_LOW);
-  delay(dly);
-  setReset(RESET_HIGH);
-
-  Serial.println("ENABLE 1");
-  setEnable(en_A0_7);
-  delay(dly);
-//  setEnable(en_NONE);
-
-  Serial.println("ENABLE 2");
-  setEnable(en_A8_15);
-  delay(dly);
-//  setEnable(en_NONE);
-
-  Serial.println("ENABLE 3");
-  setEnable(en_D0_7);
-  delay(dly);
-//  setEnable(en_NONE);
-
-  Serial.println("CLOCK");
-  setClock(CLOCK_LOW);
-  delay(dly);
-  setClock(CLOCK_HIGH);
-
-  Serial.println("end");
-}
-#endif
