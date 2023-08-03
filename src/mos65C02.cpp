@@ -3,7 +3,8 @@
 // 
 #include "RPi_Pico_TimerInterrupt.h"
 #include "mos65C02.h"
-#include "memory.pio.h"
+#include "memory_sm0_clock.pio.h"
+#include "memory_sm1_address.pio.h"
 
 #define DELAY_FACTOR_SHORT() asm volatile("nop\nnop\nnop\nnop\n");
 //#define DELAY_FACTOR_LONG()  asm volatile("nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\n");
@@ -206,15 +207,21 @@ bool ClockHandler(struct repeating_timer* t) {
   return true;
 }
 
-void blink_pin_forever(PIO pio, uint sm, uint offset, uint pin, uint freq) {
-    blink_program_init(pio, sm, offset, pin);
+void start_clock_program(PIO pio, uint sm, uint offset, uint pin, uint freq) {
+    clock_program_init(pio, sm, offset, pin);
     pio_sm_set_enabled(pio, sm, true);
 
-    Serial.printf("Blinking pin %d at %d Hz\n", pin, freq);
+
+    Serial.printf("Generating clock on pin %d at %d Hz\n", pin, freq);
 
     // PIO counter program takes 3 more cycles in total than we pass as
     // input (wait for n + 1; mov; jmp)
     pio->txf[sm] = (clock_get_hz(clk_sys) / (2 * freq)) - 3;
+}
+
+void start_address_program(PIO pio, uint sm, uint offset, uint pin, uint freq) {
+    address_program_init(pio, sm, offset, pin);
+    pio_sm_set_enabled(pio, sm, true);
 }
 
 /// <summary>
@@ -241,9 +248,14 @@ void init6502() {
   // pinMode(9, OUTPUT);
   // gpio_put(9, false);
   
-  // pinMode(10, OUTPUT);
-  // gpio_put(10, false);
+  pinMode(10, OUTPUT);
+  gpio_put(10, false);
   
+  for(int i = 0; i < 7; i++)
+  {
+    pinMode(i, OUTPUT);
+    gpio_put(i, false);
+  }
 
   // RW
   //pinMode(uP_RW, INPUT_PULLUP);
@@ -270,10 +282,25 @@ void init6502() {
   //   Serial.println(F("Can't set Clockspeed. Select another freq"));
 
   PIO pio = pio1;
-  uint offset = pio_add_program(pio, &blink_program);
+  uint offset = pio_add_program(pio, &clock_program);
   Serial.printf("Loaded program at %d\n", offset);
 
-  blink_pin_forever(pio, 0, offset, uP_CLOCK, 1);
+  start_clock_program(pio, 0, offset, uP_CLOCK, 1);
+  offset = pio_add_program(pio, &address_program);
+  start_address_program(pio, 1, offset, uP_CLOCK, 1);
+
+  reset6502();
+
+  while(true)
+  {
+    if((pio->fstat & 0x200) == 0)
+    {
+      uint32_t address = pio->rxf[1];
+      Serial.printf("Address: %#04X\n", address);
+      //Serial.printf("FSTAT: %#08X\n", pio->fstat);
+    }
+    //Serial.printf("FSTAT: %#08X\n", pio->fstat);
+  }
 
   // while(true)
   // {

@@ -299,13 +299,16 @@ void setup() {
   Serial.begin(115200);
   //  while (!Serial);
 
-  sleep_ms(5000);
+  sleep_ms(3000);
   Serial.println("NEO6502 memulator v0.021a");
 
   if (!display.begin()) {
     Serial.println("ERROR: not enough RAM available");
     for (;;);
   }
+
+  Serial.printf("Running at %dMHz\n", clock_get_hz(clk_sys)/1000000);
+
 
   Serial.printf("Starting ...\n");
 
