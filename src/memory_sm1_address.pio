@@ -1,23 +1,23 @@
 .program address
 .wrap_target
-    wait 1 irq 0    
-    set pins, 0b110[31] ; activate A0-A7
+    wait 1 irq 0   
+    set pins, 0b110[5] ; activate A0-A7
     in  pins, 8     ; read 8 bits
-    set pins, 0b101[31] ; activate A8-A15
+    set pins, 0b101[5] ; activate A8-A15
     in  pins, 8     ; read 8 bits
-    set pins, 0b011[31] ; activate D0-D7
+    set pins, 0b011[5] ; activate D0-D7
     in  pins, 12     ; read 12 bits data and r/w bit
     in  null, 4
     push ; push address, data, rw
     mov osr, ~null ; set pins 0-7 to OUT
     out pindirs, 8
-    ;irq clear 0
-    wait 1 irq 1
+    irq 1
+    wait 1 irq 2
     pull block
     out pins, 8 ; Write out data
     mov osr, null ; set pins 0-7 to IN
     out pindirs, 8
-    ;irq clear 7
+    irq 3
 .wrap
 
 % c-sdk {
@@ -40,6 +40,7 @@ void address_program_init(PIO pio, uint sm, uint offset, uint pin) {
    pio_sm_config c = address_program_get_default_config(offset);
    sm_config_set_set_pins(&c, 8, 3);
    sm_config_set_in_pins(&c, 0);
+   sm_config_set_out_pins(&c, 0, 8);
    pio_sm_init(pio, sm, offset, &c);
 }
 %}

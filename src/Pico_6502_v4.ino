@@ -299,7 +299,7 @@ void setup() {
   Serial.begin(115200);
   //  while (!Serial);
 
-  sleep_ms(3000);
+  sleep_ms(5000);
   Serial.println("NEO6502 memulator v0.021a");
 
   if (!display.begin()) {
@@ -428,20 +428,9 @@ void loop() {
       *(mem + value.data.address) = value.data.data;
     }
     uint8_t data = *(mem + value.data.address);
-    Serial.printf("Value: %08X Address: %04X Data: %02X Type: %s Send Data: %02X\n", value.value, value.data.address, value.data.data, write ? "W" : "R" , data);
-    union u32_u8
-    {
-      uint32_t v32;
-      uint8_t v8[4];
-    } data_out;
-    data_out.v8[0] = data;
-    data_out.v8[1] = data;
-    data_out.v8[2] = data;
-    data_out.v8[3] = data;
+    //Serial.printf("Value: %08X Address: %04X Data: %02X Type: %s Send Data: %02X\n", value.value, value.data.address, value.data.data, write ? "W" : "R" , data);
 
-    pio->txf[1] = data_out.v32;
-    //pio->txf[0] = 0xEA;
-    //Serial.printf("FSTAT: %#08X\n", pio->fstat);
+    pio->txf[1] = data;
   }
 
   serialEvent1();

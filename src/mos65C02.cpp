@@ -290,7 +290,7 @@ void init6502() {
   
   offset = pio_add_program(pio, &clock_program);
   Serial.printf("Loaded program at %d\n", offset);
-  start_clock_program(pio, 0, offset, uP_CLOCK, 1);
+  start_clock_program(pio, 0, offset, uP_CLOCK, 1000000);
 
   //reset6502();
 
