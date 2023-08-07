@@ -233,11 +233,11 @@ void init6502() {
   //setClock(CLOCK_HIGH);
 
   // DEBUG
-  pinMode(pDebug, OUTPUT);
+  //pinMode(pDebug, OUTPUT);
 
   // RESET
   pinMode(uP_RESET, OUTPUT);
-  setReset(RESET_LOW);
+  //setReset(RESET_LOW);
 
   // pinMode(uP_CLOCK, OUTPUT);
   // gpio_put(uP_CLOCK, false);
@@ -248,17 +248,17 @@ void init6502() {
   // pinMode(9, OUTPUT);
   // gpio_put(9, false);
   
-  pinMode(10, OUTPUT);
-  gpio_put(10, false);
+  // pinMode(10, OUTPUT);
+  // gpio_put(10, false);
   
-  for(int i = 0; i < 7; i++)
-  {
-    pinMode(i, OUTPUT);
-    gpio_put(i, false);
-  }
+  // for(int i = 0; i < 7; i++)
+  // {
+  //   pinMode(i, OUTPUT);
+  //   gpio_put(i, false);
+  // }
 
   // RW
-  //pinMode(uP_RW, INPUT_PULLUP);
+  pinMode(uP_RW, INPUT_PULLUP);
 
   // BUS ENABLE
   //gpio_init_mask(en_MASK); 
@@ -282,25 +282,35 @@ void init6502() {
   //   Serial.println(F("Can't set Clockspeed. Select another freq"));
 
   PIO pio = pio1;
-  uint offset = pio_add_program(pio, &clock_program);
-  Serial.printf("Loaded program at %d\n", offset);
+  uint offset = 0;
 
-  start_clock_program(pio, 0, offset, uP_CLOCK, 1);
   offset = pio_add_program(pio, &address_program);
+  Serial.printf("Loaded program at %d\n", offset);
   start_address_program(pio, 1, offset, uP_CLOCK, 1);
+  
+  offset = pio_add_program(pio, &clock_program);
+  Serial.printf("Loaded program at %d\n", offset);
+  start_clock_program(pio, 0, offset, uP_CLOCK, 1);
 
-  reset6502();
+  //reset6502();
 
-  while(true)
-  {
-    if((pio->fstat & 0x200) == 0)
-    {
-      uint32_t address = pio->rxf[1];
-      Serial.printf("Address: %#04X\n", address);
-      //Serial.printf("FSTAT: %#08X\n", pio->fstat);
-    }
-    //Serial.printf("FSTAT: %#08X\n", pio->fstat);
-  }
+  // while(true)
+  // {
+  //   if((pio->fstat & 0x200) == 0)
+  //   {
+  //     union u32
+  //     {
+  //       uint32_t value;
+  //       uint16_t address_data[2];
+  //     } value;
+  //     value.value = pio->rxf[1];
+  //     //uint16_t address  = (uint16_t) (( value >> 16) & 0xFFFFUL);
+  //     Serial.printf("Value: %08X Address: %04X Data: %02X\n", value.value, value.address_data[0], value.address_data[1]);
+  //     pio->txf[0] = *(mem + value.address_data[0]);
+  //     //Serial.printf("FSTAT: %#08X\n", pio->fstat);
+  //   }
+  //   //Serial.printf("FSTAT: %#08X\n", pio->fstat);
+  // }
 
   // while(true)
   // {

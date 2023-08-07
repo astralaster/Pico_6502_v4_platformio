@@ -315,7 +315,10 @@ void setup() {
   initDisplay();
 
   initmemory();
+  // for( int i = 0; i < 0xFF; i++)
+  //   mem[i] = 0xEA;
 
+  // mem[0xEA] = 0xEA;
   init6502();
   //reset6502();
 
@@ -356,16 +359,18 @@ void serialEvent1()
 
     case 0x12: // ^R
       Serial.read();
-      Serial.println("RESET");
-      //      showCursor(true);
-      reset6502();
+      Serial.println("RESET ON");
+      gpio_put(uP_RESET, false);
       break;
 
     case 0x0C: // ^L
       Serial.read();
-      Serial.println("LOGGING");
-      logState = !logState;
-      clockCount = 0UL;
+      Serial.println("RESET OFF");
+      gpio_put(uP_RESET, true);
+      // Serial.read();
+      // Serial.println("LOGGING");
+      // logState = !logState;
+      // clockCount = 0UL;
       break;
 
     case 0x04: // ^D
@@ -402,6 +407,42 @@ void loop() {
   static uint32_t i, f = 1;
 
 //  tick6502();
+  
+  PIO pio = pio1;
+  if((pio->fstat & 0x200) == 0)
+  {
+    union u32
+    {
+      uint32_t value;
+      struct {
+        uint16_t address;
+        uint8_t data;
+        uint8_t flags;
+      } data;
+    } value;
+    value.value = pio->rxf[1];
+    //uint16_t address  = (uint16_t) (( value >> 16) & 0xFFFFUL);
+    bool write = value.data.flags == 0x3;
+    if(write)
+    {
+      *(mem + value.data.address) = value.data.data;
+    }
+    uint8_t data = *(mem + value.data.address);
+    Serial.printf("Value: %08X Address: %04X Data: %02X Type: %s Send Data: %02X\n", value.value, value.data.address, value.data.data, write ? "W" : "R" , data);
+    union u32_u8
+    {
+      uint32_t v32;
+      uint8_t v8[4];
+    } data_out;
+    data_out.v8[0] = data;
+    data_out.v8[1] = data;
+    data_out.v8[2] = data;
+    data_out.v8[3] = data;
+
+    pio->txf[1] = data_out.v32;
+    //pio->txf[0] = 0xEA;
+    //Serial.printf("FSTAT: %#08X\n", pio->fstat);
+  }
 
   serialEvent1();
   scanVDU();

@@ -1,14 +1,23 @@
 .program address
 .wrap_target
     wait 1 irq 0    
-    set pins, 0b00110 ; activate A0-A7
-    mov y,y[31]
+    set pins, 0b110[31] ; activate A0-A7
     in  pins, 8     ; read 8 bits
-    set pins, 0b00101 ; activate A8-A15
-    mov y,y[31]
+    set pins, 0b101[31] ; activate A8-A15
     in  pins, 8     ; read 8 bits
-    mov osr, isr
-    push
+    set pins, 0b011[31] ; activate D0-D7
+    in  pins, 12     ; read 12 bits data and r/w bit
+    in  null, 4
+    push ; push address, data, rw
+    mov osr, ~null ; set pins 0-7 to OUT
+    out pindirs, 8
+    ;irq clear 0
+    wait 1 irq 1
+    pull block
+    out pins, 8 ; Write out data
+    mov osr, null ; set pins 0-7 to IN
+    out pindirs, 8
+    ;irq clear 7
 .wrap
 
 % c-sdk {

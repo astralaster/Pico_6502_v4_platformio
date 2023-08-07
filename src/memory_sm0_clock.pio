@@ -3,13 +3,13 @@
     out y, 32
 .wrap_target
     mov x, y
-    
-    set pins, 1   ; Clock high
-    irq set 0     ; Notify Address SM
+    set pins,1[2] ; CLOCK HIGH
+    irq wait 0     ; CLOCK HIGH, Notify Address SM
 lp1:
     jmp x-- lp1   ; Delay for (x + 1) cycles, x is a 32 bit number
     mov x, y
-    set pins, 0   ; Clock low
+    irq wait 1
+    set pins,0[2] ; CLOCK LOW
 lp2:
     jmp x-- lp2   ; Delay for the same number of cycles again
 .wrap
