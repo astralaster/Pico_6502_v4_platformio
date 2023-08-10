@@ -1,6 +1,7 @@
 // 
 // Author: Rien Matthijsse
 // 
+#include "hardware/dma.h"
 #include "RPi_Pico_TimerInterrupt.h"
 #include "mos65C02.h"
 #include "memory_sm0_clock.pio.h"
@@ -224,63 +225,55 @@ void start_address_program(PIO pio, uint sm, uint offset, uint pin, uint freq) {
     pio_sm_set_enabled(pio, sm, true);
 }
 
+int dma_chan;
+
+void dma_handler() {
+  //Serial.printf(__FUNCTION__);
+  // Clear the interrupt request.
+  dma_hw->ints1 = 1u << dma_chan;
+  union u32
+  {
+    uint32_t value;
+    struct {
+      uint16_t address;
+      uint8_t data;
+      uint8_t flags;
+    } data;
+  } value;
+
+  if((pio1->fstat & 0x200) != 0)
+  {
+    dma_channel_abort(dma_chan);
+    return;
+     //Serial.print("WTF");
+  }
+
+
+  value.value = pio1->rxf[1];
+  //uint16_t address  = (uint16_t) (( value >> 16) & 0xFFFFUL);
+  bool write = value.data.flags == 0x3;
+  if(write)
+  {
+    *(mem + value.data.address) = value.data.data;
+  }
+
+  void* address = mem + value.data.address;
+  dma_channel_set_read_addr(dma_chan, address, true);
+  Serial.printf("Value: %08X Address: %04X Data: %02X Type: %s Send Data: %02X\n", value.value, value.data.address, value.data.data, write ? "W" : "R" , data);
+}
+
 /// <summary>
 /// initialise the 65C02
 /// </summary>
 void init6502() {
-  // CLOCK
-  //pinMode(uP_CLOCK, OUTPUT);
-  //setClock(CLOCK_HIGH);
-
-  // DEBUG
-  //pinMode(pDebug, OUTPUT);
 
   // RESET
   pinMode(uP_RESET, OUTPUT);
-  //setReset(RESET_LOW);
-
-  // pinMode(uP_CLOCK, OUTPUT);
-  // gpio_put(uP_CLOCK, false);
-
-  // pinMode(8, OUTPUT);
-  // gpio_put(8, true);
-
-  // pinMode(9, OUTPUT);
-  // gpio_put(9, false);
-  
-  // pinMode(10, OUTPUT);
-  // gpio_put(10, false);
-  
-  // for(int i = 0; i < 7; i++)
-  // {
-  //   pinMode(i, OUTPUT);
-  //   gpio_put(i, false);
-  // }
 
   // RW
   pinMode(uP_RW, INPUT_PULLUP);
 
-  // BUS ENABLE
-  //gpio_init_mask(en_MASK); 
-  //gpio_set_dir_out_masked(en_MASK); // enable as output
-  //setEnable(en_NONE); // all high
-
-  // ADDRESS
-  // DATA
-  //gpio_init_mask(BUS_MASK);
-  //setDirInput();
-
-  //set up clock handler
-  clockActive = true;
-  addressValid = false;
-
-  // // Interval in microsecs
-  // if (IClock1.attachInterrupt(100000, ClockHandler)) {
-  //   Serial.printf("CLOCK driver installed [%d kHz]\n", 100);
-  // }
-  // else
-  //   Serial.println(F("Can't set Clockspeed. Select another freq"));
-
+  // PIO
   PIO pio = pio1;
   uint offset = 0;
 
@@ -290,32 +283,33 @@ void init6502() {
   
   offset = pio_add_program(pio, &clock_program);
   Serial.printf("Loaded program at %d\n", offset);
-  start_clock_program(pio, 0, offset, uP_CLOCK, 1000000);
+  start_clock_program(pio, 0, offset, uP_CLOCK, 10);
 
-  //reset6502();
+  // DMA
+  dma_chan = dma_claim_unused_channel(true);
+  dma_channel_config c = dma_channel_get_default_config(dma_chan);
+  channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+  channel_config_set_read_increment(&c, false);
+  channel_config_set_dreq(&c, pio_get_dreq(pio1, 1, true));
 
-  // while(true)
-  // {
-  //   if((pio->fstat & 0x200) == 0)
-  //   {
-  //     union u32
-  //     {
-  //       uint32_t value;
-  //       uint16_t address_data[2];
-  //     } value;
-  //     value.value = pio->rxf[1];
-  //     //uint16_t address  = (uint16_t) (( value >> 16) & 0xFFFFUL);
-  //     Serial.printf("Value: %08X Address: %04X Data: %02X\n", value.value, value.address_data[0], value.address_data[1]);
-  //     pio->txf[0] = *(mem + value.address_data[0]);
-  //     //Serial.printf("FSTAT: %#08X\n", pio->fstat);
-  //   }
-  //   //Serial.printf("FSTAT: %#08X\n", pio->fstat);
-  // }
+  dma_channel_configure(
+    dma_chan,
+    &c,
+    &pio1_hw->txf[1], // Write address (only need to set this once)
+    NULL, // Don't provide a read address yet
+    1, // Write the same value many times, then halt and interrupt
+    true // Don't start yet
+  );
 
-  // while(true)
-  // {
-  //     Serial.printf("Received: %c\n", program_getc(pio, 0));
-  // }
+  // Tell the DMA to raise IRQ line 0 when the channel finishes a block
+  dma_channel_set_irq1_enabled(dma_chan, true);
+
+  // Configure the processor to run dma_handler() when DMA IRQ 0 is asserted
+  irq_set_exclusive_handler(DMA_IRQ_1, dma_handler);
+  irq_set_enabled(DMA_IRQ_1, true);
+
+  // Manually call the handler once, to trigger the first transfer
+  //dma_handler();
 }
 
 /// <summary>
