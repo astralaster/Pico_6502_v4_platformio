@@ -230,7 +230,7 @@ int dma_chan;
 void dma_handler() {
   //Serial.printf(__FUNCTION__);
   // Clear the interrupt request.
-  dma_hw->ints1 = 1u << dma_chan;
+  //dma_hw->ints1 = 1u << dma_chan;
   union u32
   {
     uint32_t value;
@@ -241,12 +241,12 @@ void dma_handler() {
     } data;
   } value;
 
-  if((pio1->fstat & 0x200) != 0)
-  {
-    dma_channel_abort(dma_chan);
-    return;
-     //Serial.print("WTF");
-  }
+  // if((pio1->fstat & 0x200) != 0)
+  // {
+  //   dma_channel_abort(dma_chan);
+  //   return;
+  //    //Serial.print("WTF");
+  // }
 
 
   value.value = pio1->rxf[1];
@@ -257,9 +257,11 @@ void dma_handler() {
     *(mem + value.data.address) = value.data.data;
   }
 
-  void* address = mem + value.data.address;
-  dma_channel_set_read_addr(dma_chan, address, true);
-  Serial.printf("Value: %08X Address: %04X Data: %02X Type: %s Send Data: %02X\n", value.value, value.data.address, value.data.data, write ? "W" : "R" , data);
+  uint8_t* address = mem + value.data.address;
+  uint8_t data = *address;
+  pio1->txf[1] = data;
+  //dma_channel_set_read_addr(dma_chan, address, true);
+  //Serial.printf("Value: %08X Address: %04X Data: %02X Type: %s Send Data: %02X\n", value.value, value.data.address, value.data.data, write ? "W" : "R" , data);
 }
 
 /// <summary>
@@ -283,30 +285,30 @@ void init6502() {
   
   offset = pio_add_program(pio, &clock_program);
   Serial.printf("Loaded program at %d\n", offset);
-  start_clock_program(pio, 0, offset, uP_CLOCK, 10);
+  start_clock_program(pio, 0, offset, uP_CLOCK, 4000000);
 
   // DMA
-  dma_chan = dma_claim_unused_channel(true);
-  dma_channel_config c = dma_channel_get_default_config(dma_chan);
-  channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
-  channel_config_set_read_increment(&c, false);
-  channel_config_set_dreq(&c, pio_get_dreq(pio1, 1, true));
+  // dma_chan = dma_claim_unused_channel(true);
+  // dma_channel_config c = dma_channel_get_default_config(dma_chan);
+  // channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+  // channel_config_set_read_increment(&c, false);
+  // channel_config_set_dreq(&c, pio_get_dreq(pio1, 1, true));
 
-  dma_channel_configure(
-    dma_chan,
-    &c,
-    &pio1_hw->txf[1], // Write address (only need to set this once)
-    NULL, // Don't provide a read address yet
-    1, // Write the same value many times, then halt and interrupt
-    true // Don't start yet
-  );
+  // dma_channel_configure(
+  //   dma_chan,
+  //   &c,
+  //   &pio1_hw->txf[1], // Write address (only need to set this once)
+  //   NULL, // Don't provide a read address yet
+  //   1, // Write the same value many times, then halt and interrupt
+  //   true // Don't start yet
+  // );
 
   // Tell the DMA to raise IRQ line 0 when the channel finishes a block
-  dma_channel_set_irq1_enabled(dma_chan, true);
+  //dma_channel_set_irq1_enabled(dma_chan, true);
 
-  // Configure the processor to run dma_handler() when DMA IRQ 0 is asserted
-  irq_set_exclusive_handler(DMA_IRQ_1, dma_handler);
-  irq_set_enabled(DMA_IRQ_1, true);
+  pio_set_irq0_source_enabled(pio1,  pis_sm1_rx_fifo_not_empty, true);
+  irq_set_exclusive_handler(PIO1_IRQ_0, dma_handler);
+  irq_set_enabled(PIO1_IRQ_0, true);
 
   // Manually call the handler once, to trigger the first transfer
   //dma_handler();
