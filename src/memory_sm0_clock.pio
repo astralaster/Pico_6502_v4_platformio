@@ -1,19 +1,8 @@
 .program clock
-    pull block
-    out y, 32
 .wrap_target
-    mov x, y
-    set pins,1[2] ; CLOCK HIGH
-    irq 0    ; CLOCK HIGH, Notify Address SM
-    wait 1 irq 1
-lp1:
-    jmp x-- lp1   ; Delay for (x + 1) cycles, x is a 32 bit number
-    mov x, y
-    irq 2
+    set pins,1 ; CLOCK HIGH
     wait 1 irq 3
     set pins,0[2] ; CLOCK LOW
-lp2:
-    jmp x-- lp2   ; Delay for the same number of cycles again
 .wrap
 
 % c-sdk {

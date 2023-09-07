@@ -4,7 +4,6 @@
 #include "hardware/dma.h"
 #include "RPi_Pico_TimerInterrupt.h"
 #include "mos65C02.h"
-#include "memory_sm0_clock.pio.h"
 #include "memory_sm1_address.pio.h"
 
 #define DELAY_FACTOR_SHORT() asm volatile("nop\nnop\nnop\nnop\n");
@@ -208,20 +207,8 @@ bool ClockHandler(struct repeating_timer* t) {
   return true;
 }
 
-void start_clock_program(PIO pio, uint sm, uint offset, uint pin, uint freq) {
-    clock_program_init(pio, sm, offset, pin);
-    pio_sm_set_enabled(pio, sm, true);
-
-
-    Serial.printf("Generating clock on pin %d at %d Hz\n", pin, freq);
-
-    // PIO counter program takes 3 more cycles in total than we pass as
-    // input (wait for n + 1; mov; jmp)
-    pio->txf[sm] = (clock_get_hz(clk_sys) / (2 * freq)) - 3;
-}
-
-void start_address_program(PIO pio, uint sm, uint offset, uint pin, uint freq) {
-    address_program_init(pio, sm, offset, pin);
+void start_address_program(PIO pio, uint sm, uint offset) {
+    address_program_init(pio, sm, offset);
     pio_sm_set_enabled(pio, sm, true);
 }
 
@@ -249,7 +236,7 @@ void dma_handler() {
   // }
 
 
-  value.value = pio1->rxf[1];
+  value.value = pio1->rxf[0];
   //uint16_t address  = (uint16_t) (( value >> 16) & 0xFFFFUL);
   bool write = value.data.flags == 0x3;
   if(write)
@@ -259,7 +246,7 @@ void dma_handler() {
 
   uint8_t* address = mem + value.data.address;
   uint8_t data = *address;
-  pio1->txf[1] = data;
+  pio1->txf[0] = data;
   //dma_channel_set_read_addr(dma_chan, address, true);
   //Serial.printf("Value: %08X Address: %04X Data: %02X Type: %s Send Data: %02X\n", value.value, value.data.address, value.data.data, write ? "W" : "R" , data);
 }
@@ -281,37 +268,17 @@ void init6502() {
 
   offset = pio_add_program(pio, &address_program);
   Serial.printf("Loaded program at %d\n", offset);
-  start_address_program(pio, 1, offset, uP_CLOCK, 1);
   
-  offset = pio_add_program(pio, &clock_program);
-  Serial.printf("Loaded program at %d\n", offset);
-  start_clock_program(pio, 0, offset, uP_CLOCK, 4000000);
-
-  // DMA
-  // dma_chan = dma_claim_unused_channel(true);
-  // dma_channel_config c = dma_channel_get_default_config(dma_chan);
-  // channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
-  // channel_config_set_read_increment(&c, false);
-  // channel_config_set_dreq(&c, pio_get_dreq(pio1, 1, true));
-
-  // dma_channel_configure(
-  //   dma_chan,
-  //   &c,
-  //   &pio1_hw->txf[1], // Write address (only need to set this once)
-  //   NULL, // Don't provide a read address yet
-  //   1, // Write the same value many times, then halt and interrupt
-  //   true // Don't start yet
-  // );
-
-  // Tell the DMA to raise IRQ line 0 when the channel finishes a block
-  //dma_channel_set_irq1_enabled(dma_chan, true);
-
-  pio_set_irq0_source_enabled(pio1,  pis_sm1_rx_fifo_not_empty, true);
+  pio_set_irq0_source_enabled(pio1,  pis_sm0_rx_fifo_not_empty, true);
   irq_set_exclusive_handler(PIO1_IRQ_0, dma_handler);
+  irq_set_priority(PIO1_IRQ_0, 0);
   irq_set_enabled(PIO1_IRQ_0, true);
 
-  // Manually call the handler once, to trigger the first transfer
-  //dma_handler();
+  start_address_program(pio, 0, offset);
+
+  setReset(false);
+  sleep_ms(2000);
+  setReset(true);
 }
 
 /// <summary>

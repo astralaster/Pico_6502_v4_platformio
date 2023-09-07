@@ -321,8 +321,8 @@ void setup() {
   // mem[0xEA] = 0xEA;
   init6502();
   //reset6502();
-
   initSound();
+
 
   // 4 stats
   clockCount = 0UL;
@@ -404,68 +404,63 @@ void serialEvent1()
 /// 
 /// </summary>
 void loop() {
+  static uint32_t i, f = 1;
 
-  while(true)
-  {
+//  tick6502();
+  
+  // PIO pio = pio1;
+  // if((pio->fstat & 0x200) == 0)
+  // {
+  //   union u32
+  //   {
+  //     uint32_t value;
+  //     struct {
+  //       uint16_t address;
+  //       uint8_t data;
+  //       uint8_t flags;
+  //     } data;
+  //   } value;
+  //   value.value = pio->rxf[1];
+  //   //uint16_t address  = (uint16_t) (( value >> 16) & 0xFFFFUL);
+  //   bool write = value.data.flags == 0x3;
+  //   if(write)
+  //   {
+  //     *(mem + value.data.address) = value.data.data;
+  //   }
+  //   uint8_t data = *(mem + value.data.address);
+  //   //Serial.printf("Value: %08X Address: %04X Data: %02X Type: %s Send Data: %02X\n", value.value, value.data.address, value.data.data, write ? "W" : "R" , data);
 
-    static uint32_t i, f = 1;
+  //   pio->txf[1] = data;
+  // }
 
-  //  tick6502();
-    
-    // PIO pio = pio1;
-    // if((pio->fstat & 0x200) == 0)
-    // {
-    //   union u32
-    //   {
-    //     uint32_t value;
-    //     struct {
-    //       uint16_t address;
-    //       uint8_t data;
-    //       uint8_t flags;
-    //     } data;
-    //   } value;
-    //   value.value = pio->rxf[1];
-    //   //uint16_t address  = (uint16_t) (( value >> 16) & 0xFFFFUL);
-    //   bool write = value.data.flags == 0x3;
-    //   if(write)
-    //   {
-    //     *(mem + value.data.address) = value.data.data;
-    //   }
-    //   uint8_t data = *(mem + value.data.address);
-    //   //Serial.printf("Value: %08X Address: %04X Data: %02X Type: %s Send Data: %02X\n", value.value, value.data.address, value.data.data, write ? "W" : "R" , data);
+  serialEvent1();
+  scanVDU();
+  scanSound();
 
-    //   pio->txf[1] = data;
-    // }
-
-    serialEvent1();
-    scanVDU();
-    scanSound();
-
-    if (f-- == 0) {
-      if ((millis() - frameClockTS) >= FRAMETIME) {
-        if (hasDisplayUpdate > 0) {
-          display.swap(true, false);
-          hasDisplayUpdate = 0;
-        }
-
-        frameClockTS = millis();
+  if (f-- == 0) {
+    if ((millis() - frameClockTS) >= FRAMETIME) {
+      if (hasDisplayUpdate > 0) {
+        display.swap(true, false);
+        hasDisplayUpdate = 0;
       }
 
-      f = 7500;
+      frameClockTS = millis();
     }
 
-    // only do stats when in logging mode
-    if (logState) {
-      if (i-- == 0) {
-        if ((millis() - lastClockTS) >= 5000UL) {
-          Serial.printf("kHz = %0.1f\n", clockCount / 5000.0);
+    f = 7500;
+  }
 
-          clockCount = 0UL;
-          lastClockTS = millis();
-        }
+  // only do stats when in logging mode
+  if (logState) {
+    if (i-- == 0) {
+      if ((millis() - lastClockTS) >= 5000UL) {
+        Serial.printf("kHz = %0.1f\n", clockCount / 5000.0);
 
-        i = 20000;
+        clockCount = 0UL;
+        lastClockTS = millis();
       }
+
+      i = 20000;
     }
   }
 }
